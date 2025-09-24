@@ -1,5 +1,5 @@
 export const runtime = "nodejs";
-export const dynamic = 'force-dynamic'; // Add this to fix the error
+export const dynamic = 'force-dynamic';
 import connectDB from "@/config/db";
 import Order from "@/models/Order";
 import Product from "@/models/Product";
@@ -16,6 +16,9 @@ export async function GET(request) {
         }
 
         await connectDB();
+
+        // ⭐ ADD THIS LINE - Force fresh data
+        await Order.findOne({ userId }).limit(1);
 
         // Find orders with string userId
         const orders = await Order.find({ userId }).sort({ date: -1 });
