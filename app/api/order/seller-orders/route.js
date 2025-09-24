@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 import connectDB from "@/config/db";
 import authSeller from "@/lib/authSeller";
 import Order from "@/models/Order";
-import Product from "@/models/Product";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
@@ -16,26 +15,48 @@ export async function GET(request) {
         }
 
         const isSeller = await authSeller(user.id);
-
         if (!isSeller) {
             return NextResponse.json({ success: false, message: 'Not authorized' }, { status: 401 });
         }
 
         await connectDB();
 
-        // More efficient query - get orders that contain seller's products in one query
+        // Fetch orders with populated products and address
         const sellerOrders = await Order.find({})
             .populate({
                 path: 'items.product',
-                match: { userId: user.id } // Only populate products belonging to this seller
+                match: { userId: user.id }, // Only populate products belonging to this seller
             })
-            .then(orders => orders.filter(order => 
-                order.items.some(item => item.product !== null) // Filter orders that have at least one product from this seller
-            ));
+            .populate('address') // Populate address reference
+            .lean();
+
+        // Filter orders that have at least one product from this seller
+        const filteredOrders = sellerOrders.filter(order => 
+            order.items.some(item => item.product !== null)
+        );
+
+        // Structure response with customer data from address
+        const ordersWithCustomer = filteredOrders.map(order => {
+            console.log(`Order ${order._id} address:`, JSON.stringify(order.address, null, 2)); // Debug log
+            return {
+                ...order,
+                customer: {
+                    fullName: order.address?.fullName || "N/A",
+                    phoneNumber: order.address?.phoneNumber || "N/A",
+                    shippingAddress: order.address ? {
+                        addressLine1: order.address.area || "",
+                        city: order.address.city || "",
+                        state: order.address.state || "",
+                        pincode: order.address.pincode || "",
+                        country: "" // Address model lacks country
+                    } : null
+                },
+            };
+        });
 
         return NextResponse.json({ 
             success: true, 
-            orders: sellerOrders 
+            orders: ordersWithCustomer 
         });
 
     } catch (error) {
@@ -53,7 +74,6 @@ export async function PUT(request) {
         }
 
         const isSeller = await authSeller(user.id);
-
         if (!isSeller) {
             return NextResponse.json({ success: false, message: 'Not authorized' }, { status: 401 });
         }
@@ -67,8 +87,8 @@ export async function PUT(request) {
             return NextResponse.json({ success: false, message: 'Order ID is required' }, { status: 400 });
         }
 
-        // First, verify the order contains seller's products
-        const order = await Order.findById(orderId).populate('items.product');
+        // Verify the order contains seller's products
+        const order = await Order.findById(orderId).populate('items.product').populate('address');
         if (!order) {
             return NextResponse.json({ success: false, message: 'Order not found' }, { status: 404 });
         }
@@ -91,12 +111,28 @@ export async function PUT(request) {
             orderId,
             updateData,
             { new: true }
-        ).populate('address items.product');
+        ).populate('items.product').populate('address').lean();
+
+        console.log(`Updated order ${updatedOrder._id} address:`, JSON.stringify(updatedOrder.address, null, 2)); // Debug log
+        const responseOrder = {
+            ...updatedOrder,
+            customer: {
+                fullName: updatedOrder.address?.fullName || "N/A",
+                phoneNumber: updatedOrder.address?.phoneNumber || "N/A",
+                shippingAddress: updatedOrder.address ? {
+                    addressLine1: updatedOrder.address.area || "",
+                    city: updatedOrder.address.city || "",
+                    state: updatedOrder.address.state || "",
+                    pincode: updatedOrder.address.pincode || "",
+                    country: "" // Address model lacks country
+                } : null
+            },
+        };
 
         return NextResponse.json({ 
             success: true, 
             message: 'Order updated successfully',
-            order: updatedOrder
+            order: responseOrder
         });
 
     } catch (error) {

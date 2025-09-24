@@ -44,18 +44,19 @@ const Orders = () => {
                 }
             });
 
-            console.log("Orders API response:", data);
-
+            console.log("Orders API response:", JSON.stringify(data, null, 2)); // Debug log
             if (data.success) {
-                // Ensure we have an array and handle null/undefined
-                setOrders(Array.isArray(data.orders) ? data.orders : []);
+                const orders = Array.isArray(data.orders) ? data.orders : [];
+                orders.forEach(order => {
+                    console.log(`Order ${order._id} customer:`, JSON.stringify(order.customer, null, 2)); // Debug log
+                });
+                setOrders(orders);
             } else {
                 toast.error(data.message || "Failed to fetch orders");
                 setOrders([]);
             }
         } catch (error) {
             console.error("Error fetching orders:", error);
-            // More detailed error message
             const errorMessage = error.response?.data?.message || 
                                error.message || 
                                "Failed to fetch orders";
@@ -159,7 +160,6 @@ const Orders = () => {
         }
     };
 
-    // Safe filtering with null checks
     const filteredOrders = orders.filter(order => {
         if (!order) return false;
         
@@ -167,7 +167,9 @@ const Orders = () => {
             (order.items?.some(item => 
                 item?.product?.name?.toLowerCase().includes(searchTerm.toLowerCase())
             ) || 
-            order._id?.toLowerCase().includes(searchTerm.toLowerCase()))
+            order._id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.customer?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.customer?.phoneNumber?.toLowerCase().includes(searchTerm.toLowerCase()))
             : true;
         
         const matchesStatus = filterStatus === "all" || order.status === filterStatus;
@@ -180,13 +182,11 @@ const Orders = () => {
         }
     }, [user]);
 
-    // Safe order ID formatting
     const formatOrderId = (order) => {
         if (!order?._id) return "N/A";
         return `#${order._id.slice(-8).toUpperCase()}`;
     };
 
-    // Safe date formatting
     const formatDate = (date) => {
         if (!date) return "N/A";
         try {
@@ -200,16 +200,22 @@ const Orders = () => {
         }
     };
 
-    // Calculate total items in order
     const getTotalItems = (order) => {
         if (!order?.items) return 0;
         return order.items.reduce((total, item) => total + (item.quantity || 0), 0);
     };
 
-    // Safe image source
     const getImageSrc = (item) => {
         if (!item?.product?.image?.[0]) return assets.box_icon;
         return item.product.image[0];
+    };
+
+    // Format shipping address safely
+    const formatShippingAddress = (address) => {
+        if (!address) return "N/A";
+        const { addressLine1, city, state, pincode, country } = address;
+        const formattedAddress = `${addressLine1 || ""}, ${city || ""}, ${state || ""} ${pincode || ""}${country ? ", " + country : ""}`.trim();
+        return formattedAddress || "N/A"; // Return "N/A" if all fields are empty
     };
 
     return (
@@ -223,7 +229,7 @@ const Orders = () => {
                         <div className="flex-1 relative">
                             <input
                                 type="text"
-                                placeholder="Search by order ID or product name..."
+                                placeholder="Search by order ID, product name, customer name, or phone number..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg"
@@ -292,7 +298,7 @@ const Orders = () => {
                                             <p className="text-sm text-gray-600">
                                                 {formatDate(order.date)}
                                             </p>
-                                            <p className="text-sm text-gray-600">Customer ID: {order.userId?.slice(-8)}</p>
+                                            <p className="text-sm text-gray-600">Customer ID: {order.userId?.slice(-8) || "N/A"}</p>
                                         </div>
                                         <div className="flex gap-2 mt-2 md:mt-0">
                                             <span className={`px-3 py-1 rounded-full text-sm ${
@@ -313,20 +319,41 @@ const Orders = () => {
                                         <div>
                                             <label className="block text-sm font-medium mb-2">Order Status</label>
                                             <div className="flex flex-wrap gap-2">
-                                                {statusOptions.map((status) => (
-                                                    <button
-                                                        key={status.value}
-                                                        onClick={() => updateOrderStatus(order._id, status.value)}
-                                                        disabled={order.status === status.value}
-                                                        className={`px-3 py-2 rounded text-sm border ${
-                                                            order.status === status.value 
-                                                                ? `${status.color} border-current font-bold` 
-                                                                : 'bg-gray-100 border-gray-300 hover:bg-gray-200'
-                                                        }`}
-                                                    >
-                                                        {status.label}
-                                                    </button>
-                                                ))}
+                                                {statusOptions.map((status) => {
+                                                    console.log(`Rendering status button: ${status.value}`); // Debug log
+                                                    return (
+                                                        <button
+                                                            key={status.value}
+                                                            onClick={() => {
+                                                                if (status.value === "cancelled") {
+                                                                    setCancellingOrder(order._id);
+                                                                } else {
+                                                                    updateOrderStatus(order._id, status.value);
+                                                                }
+                                                            }}
+                                                            disabled={order.status === status.value}
+                                                            className={`px-3 py-2 rounded text-sm border ${
+                                                                order.status === status.value 
+                                                                    ? `${status.color} border-current font-bold` 
+                                                                    : 'bg-gray-100 border-gray-300 hover:bg-gray-200'
+                                                            }`}
+                                                        >
+                                                            {status.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {/* Dedicated Cancel Button for visibility */}
+                                                <button
+                                                    onClick={() => setCancellingOrder(order._id)}
+                                                    disabled={order.status === "cancelled"}
+                                                    className={`px-3 py-2 rounded text-sm border ${
+                                                        order.status === "cancelled"
+                                                            ? 'bg-red-100 text-red-800 border-current font-bold'
+                                                            : 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+                                                    }`}
+                                                >
+                                                    Cancel Order
+                                                </button>
                                             </div>
                                         </div>
 
@@ -383,27 +410,19 @@ const Orders = () => {
                                                 <p><strong>Order Total:</strong> {currency}{order.amount || 0}</p>
                                                 <p><strong>Total Items:</strong> {getTotalItems(order)}</p>
                                                 <p><strong>Order Date:</strong> {formatDate(order.date)}</p>
-                                                <p><strong>Customer ID:</strong> {order.userId?.slice(-8)}</p>
+                                                <p><strong>Customer ID:</strong> {order.userId?.slice(-8) || "N/A"}</p>
                                             </div>
                                         </div>
 
                                         <div>
-                                            <h4 className="font-medium mb-2">Actions</h4>
-                                            <div className="space-y-2">
-                                                {order.status !== "cancelled" && order.status !== "delivered" && (
-                                                    <button
-                                                        onClick={() => setCancellingOrder(order._id)}
-                                                        className="w-full bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600"
-                                                    >
-                                                        Cancel Order
-                                                    </button>
+                                            <h4 className="font-medium mb-2">Customer Information</h4>
+                                            <div className="space-y-2 p-2 bg-gray-50 rounded">
+                                                <p><strong>Name:</strong> {order.customer?.fullName || "N/A"}</p>
+                                                <p><strong>Phone Number:</strong> {order.customer?.phoneNumber || "N/A"}</p>
+                                                <p><strong>Shipping Address:</strong> {formatShippingAddress(order.customer?.shippingAddress)}</p>
+                                                {order.customer?.fullName === "N/A" && order.customer?.phoneNumber === "N/A" && formatShippingAddress(order.customer?.shippingAddress) === "N/A" && (
+                                                    <p className="text-red-600 text-xs">Customer data unavailable. Contact support.</p>
                                                 )}
-                                                <button className="w-full bg-blue-500 text-white px-3 py-2 rounded text-sm hover:bg-blue-600">
-                                                    View Details
-                                                </button>
-                                                <button className="w-full bg-gray-500 text-white px-3 py-2 rounded text-sm hover:bg-gray-600">
-                                                    Contact Customer
-                                                </button>
                                             </div>
                                         </div>
                                     </div>
