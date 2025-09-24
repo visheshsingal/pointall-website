@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const dynamic = 'force-dynamic'; // Add this to fix the error
 import connectDB from "@/config/db";
 import Order from "@/models/Order";
 import Product from "@/models/Product";
