@@ -1,9 +1,8 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ['@clerk/nextjs'],
+  },
+}
 
-export default clerkMiddleware();
-
-export const config = {
-  matcher: [
-    '/((?!_next|static|favicon.ico).*)',
-  ],
-};
+module.exports = nextConfig
