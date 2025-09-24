@@ -1,8 +1,8 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['@clerk/nextjs'],
-  },
-}
+// middleware.ts
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
-module.exports = nextConfig
+export default clerkMiddleware();
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
