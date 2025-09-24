@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 import { inngest } from "@/config/inngest";
 import Product from "@/models/Product";
 import User from "@/models/User";
