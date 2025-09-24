@@ -17,7 +17,6 @@ const Orders = () => {
     const [cancellingOrder, setCancellingOrder] = useState(null);
     const [cancelReason, setCancelReason] = useState("");
 
-    // Order status options
     const statusOptions = [
         { value: "Order Placed", label: "Order Placed", color: "bg-yellow-100 text-yellow-800" },
         { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-800" },
@@ -27,7 +26,6 @@ const Orders = () => {
         { value: "cancelled", label: "Cancelled", color: "bg-red-100 text-red-800" }
     ];
 
-    // Payment status options
     const paymentOptions = [
         { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-800" },
         { value: "paid", label: "Paid", color: "bg-green-100 text-green-800" },
@@ -40,41 +38,44 @@ const Orders = () => {
             const token = await getToken();
             console.log("Fetching seller orders...");
             
-            const { data } = await axios.get('/api/seller/orders', {
+            const { data } = await axios.get('/api/order/seller-orders', {
                 headers: { 
                     Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
                 }
             });
 
             console.log("Orders API response:", data);
 
             if (data.success) {
-                setOrders(data.orders || []);
-                toast.success("Orders loaded successfully");
+                // Ensure we have an array and handle null/undefined
+                setOrders(Array.isArray(data.orders) ? data.orders : []);
             } else {
                 toast.error(data.message || "Failed to fetch orders");
+                setOrders([]);
             }
         } catch (error) {
             console.error("Error fetching orders:", error);
-            toast.error(error.response?.data?.message || "Failed to fetch orders");
+            // More detailed error message
+            const errorMessage = error.response?.data?.message || 
+                               error.message || 
+                               "Failed to fetch orders";
+            toast.error(errorMessage);
+            setOrders([]);
         } finally {
             setLoading(false);
         }
     };
 
-    // Update order status
     const updateOrderStatus = async (orderId, newStatus) => {
         try {
             const token = await getToken();
             
-            const { data } = await axios.put('/api/seller/orders', {
+            const { data } = await axios.put('/api/order/seller-orders', {
                 orderId: orderId,
                 status: newStatus
             }, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
                 }
             });
 
@@ -92,18 +93,16 @@ const Orders = () => {
         }
     };
 
-    // Update payment status
     const updatePaymentStatus = async (orderId, newPaymentStatus) => {
         try {
             const token = await getToken();
             
-            const { data } = await axios.put('/api/seller/orders', {
+            const { data } = await axios.put('/api/order/seller-orders', {
                 orderId: orderId,
                 paymentStatus: newPaymentStatus
             }, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
                 }
             });
 
@@ -121,7 +120,6 @@ const Orders = () => {
         }
     };
 
-    // Cancel order
     const handleCancelOrder = async () => {
         if (!cancelReason.trim()) {
             toast.error("Please select a cancellation reason");
@@ -131,14 +129,13 @@ const Orders = () => {
         try {
             const token = await getToken();
             
-            const { data } = await axios.put('/api/seller/orders', {
+            const { data } = await axios.put('/api/order/seller-orders', {
                 orderId: cancellingOrder,
                 status: "cancelled",
                 cancellationReason: cancelReason
             }, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json'
                 }
             });
 
@@ -162,14 +159,15 @@ const Orders = () => {
         }
     };
 
-    // Filter orders
+    // Safe filtering with null checks
     const filteredOrders = orders.filter(order => {
+        if (!order) return false;
+        
         const matchesSearch = searchTerm ? 
-            order.items?.some(item => 
-                item.product?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+            (order.items?.some(item => 
+                item?.product?.name?.toLowerCase().includes(searchTerm.toLowerCase())
             ) || 
-            order._id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.address?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
+            order._id?.toLowerCase().includes(searchTerm.toLowerCase()))
             : true;
         
         const matchesStatus = filterStatus === "all" || order.status === filterStatus;
@@ -192,10 +190,26 @@ const Orders = () => {
     const formatDate = (date) => {
         if (!date) return "N/A";
         try {
-            return new Date(date).toLocaleDateString();
+            return new Date(date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
         } catch (error) {
             return "Invalid date";
         }
+    };
+
+    // Calculate total items in order
+    const getTotalItems = (order) => {
+        if (!order?.items) return 0;
+        return order.items.reduce((total, item) => total + (item.quantity || 0), 0);
+    };
+
+    // Safe image source
+    const getImageSrc = (item) => {
+        if (!item?.product?.image?.[0]) return assets.box_icon;
+        return item.product.image[0];
     };
 
     return (
@@ -209,7 +223,7 @@ const Orders = () => {
                         <div className="flex-1 relative">
                             <input
                                 type="text"
-                                placeholder="Search orders..."
+                                placeholder="Search by order ID or product name..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg"
@@ -234,11 +248,39 @@ const Orders = () => {
                         </select>
                     </div>
 
+                    {/* Orders Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                            <p className="text-blue-600 font-semibold">Total Orders</p>
+                            <p className="text-2xl font-bold">{orders.length}</p>
+                        </div>
+                        <div className="bg-yellow-50 p-4 rounded-lg">
+                            <p className="text-yellow-600 font-semibold">Pending</p>
+                            <p className="text-2xl font-bold">
+                                {orders.filter(order => order?.status === 'Order Placed' || order?.status === 'pending').length}
+                            </p>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg">
+                            <p className="text-green-600 font-semibold">Delivered</p>
+                            <p className="text-2xl font-bold">
+                                {orders.filter(order => order?.status === 'delivered').length}
+                            </p>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg">
+                            <p className="text-red-600 font-semibold">Cancelled</p>
+                            <p className="text-2xl font-bold">
+                                {orders.filter(order => order?.status === 'cancelled').length}
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Orders List */}
                     <div className="space-y-4">
                         {filteredOrders.length === 0 ? (
                             <div className="text-center py-12">
-                                <p className="text-gray-500">No orders found</p>
+                                <p className="text-gray-500">
+                                    {orders.length === 0 ? "No orders found" : "No orders match your filters"}
+                                </p>
                             </div>
                         ) : (
                             filteredOrders.map((order) => (
@@ -250,6 +292,7 @@ const Orders = () => {
                                             <p className="text-sm text-gray-600">
                                                 {formatDate(order.date)}
                                             </p>
+                                            <p className="text-sm text-gray-600">Customer ID: {order.userId?.slice(-8)}</p>
                                         </div>
                                         <div className="flex gap-2 mt-2 md:mt-0">
                                             <span className={`px-3 py-1 rounded-full text-sm ${
@@ -311,52 +354,62 @@ const Orders = () => {
                                     {/* Order Details */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                         <div>
-                                            <h4 className="font-medium mb-2">Products</h4>
+                                            <h4 className="font-medium mb-2">Products ({order.items?.length || 0})</h4>
                                             {order.items?.map((item, index) => (
-                                                <div key={index} className="flex gap-2 mb-2">
+                                                <div key={index} className="flex gap-2 mb-3 p-2 bg-gray-50 rounded">
                                                     <Image
-                                                        src={item.product?.image?.[0] || assets.box_icon}
+                                                        src={getImageSrc(item)}
                                                         alt={item.product?.name || "Product"}
-                                                        width={40}
-                                                        height={40}
-                                                        className="rounded"
+                                                        width={50}
+                                                        height={50}
+                                                        className="rounded object-cover"
                                                         onError={(e) => {
                                                             e.target.src = assets.box_icon;
                                                         }}
                                                     />
-                                                    <div>
-                                                        <p>{item.product?.name || "Product"}</p>
-                                                        <p className="text-gray-600">Qty: {item.quantity || 0} × {currency}{item.product?.offerPrice || 0}</p>
+                                                    <div className="flex-1">
+                                                        <p className="font-medium">{item.product?.name || "Product"}</p>
+                                                        <p className="text-gray-600">Qty: {item.quantity || 0}</p>
+                                                        <p className="text-gray-600">Price: {currency}{item.product?.offerPrice || 0}</p>
+                                                        <p className="font-semibold">Subtotal: {currency}{(item.quantity || 0) * (item.product?.offerPrice || 0)}</p>
                                                     </div>
                                                 </div>
                                             )) || <p className="text-gray-500">No items</p>}
                                         </div>
 
                                         <div>
-                                            <h4 className="font-medium mb-2">Customer</h4>
-                                            <p>{order.address?.fullName || "N/A"}</p>
-                                            <p className="text-gray-600">{order.address?.area || ""}</p>
-                                            <p className="text-gray-600">{order.address?.city || ""}, {order.address?.state || ""}</p>
-                                            <p className="text-gray-600">{order.address?.phoneNumber || ""}</p>
+                                            <h4 className="font-medium mb-2">Order Information</h4>
+                                            <div className="space-y-2 p-2 bg-gray-50 rounded">
+                                                <p><strong>Order Total:</strong> {currency}{order.amount || 0}</p>
+                                                <p><strong>Total Items:</strong> {getTotalItems(order)}</p>
+                                                <p><strong>Order Date:</strong> {formatDate(order.date)}</p>
+                                                <p><strong>Customer ID:</strong> {order.userId?.slice(-8)}</p>
+                                            </div>
                                         </div>
 
                                         <div>
-                                            <h4 className="font-medium mb-2">Summary</h4>
-                                            <p>Total: {currency}{order.amount || 0}</p>
-                                            <p>Items: {order.items?.length || 0}</p>
-                                            {order.status !== "cancelled" && order.status !== "delivered" && (
-                                                <button
-                                                    onClick={() => setCancellingOrder(order._id)}
-                                                    className="mt-2 bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                                                >
-                                                    Cancel Order
+                                            <h4 className="font-medium mb-2">Actions</h4>
+                                            <div className="space-y-2">
+                                                {order.status !== "cancelled" && order.status !== "delivered" && (
+                                                    <button
+                                                        onClick={() => setCancellingOrder(order._id)}
+                                                        className="w-full bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600"
+                                                    >
+                                                        Cancel Order
+                                                    </button>
+                                                )}
+                                                <button className="w-full bg-blue-500 text-white px-3 py-2 rounded text-sm hover:bg-blue-600">
+                                                    View Details
                                                 </button>
-                                            )}
+                                                <button className="w-full bg-gray-500 text-white px-3 py-2 rounded text-sm hover:bg-gray-600">
+                                                    Contact Customer
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
                                     {order.cancellationReason && (
-                                        <div className="mt-3 p-2 bg-red-50 rounded text-sm">
+                                        <div className="mt-3 p-3 bg-red-50 rounded text-sm">
                                             <strong>Cancellation Reason:</strong> {order.cancellationReason}
                                         </div>
                                     )}
