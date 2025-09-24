@@ -1,17 +1,16 @@
-// models/Order.js
 import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema({
     userId: { 
         type: String, 
         required: true, 
-        ref: 'User' // Consistent naming
+        ref: 'User'
     },
     items: [{
         product: { 
             type: mongoose.Schema.Types.ObjectId,
             required: true, 
-            ref: 'Product' // Capitalize to match model name
+            ref: 'Product'
         },
         quantity: { 
             type: Number, 
@@ -24,7 +23,7 @@ const orderSchema = new mongoose.Schema({
     },
     address: { 
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Address', // Capitalize to match model name
+        ref: 'Address',
         required: true 
     },
     status: { 
@@ -48,7 +47,5 @@ const orderSchema = new mongoose.Schema({
     },
 });
 
-// Use consistent naming - capitalize model names
 const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
-
 export default Order;

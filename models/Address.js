@@ -1,4 +1,3 @@
-// models/Address.js
 import mongoose from "mongoose";
 
 const addressSchema = new mongoose.Schema({
@@ -9,9 +8,7 @@ const addressSchema = new mongoose.Schema({
     area: { type: String, required: true },
     city: { type: String, required: true },
     state: { type: String, required: true },
-})
+});
 
-// Use consistent capitalized naming
 const Address = mongoose.models.Address || mongoose.model('Address', addressSchema);
-
 export default Address;

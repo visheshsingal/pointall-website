@@ -1,8 +1,7 @@
-// models/Product.js
 import mongoose from "mongoose";
 
 const productSchema = new mongoose.Schema({
-    userId: { type: String, required: true, ref: "User" }, // Capitalize ref
+    userId: { type: String, required: true, ref: "User" },
     name: { type: String, required: true },
     description: { type: String, required: true },
     price: { type: Number, required: true },
@@ -14,10 +13,7 @@ const productSchema = new mongoose.Schema({
     videos: [{ type: String }],
     stockQuantity: { type: Number, required: true, default: 0 },
     date: { type: Number, required: true }
-})
+});
 
-// Change to capitalized model name
 const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
-
 export default Product;
-
