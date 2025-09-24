@@ -2,6 +2,9 @@
     "functions": {
       "app/api/**/*.js": {
         "runtime": "@vercel/node"
+      },
+      "middleware.js": {
+        "runtime": "@vercel/node"
       }
     }
   }
